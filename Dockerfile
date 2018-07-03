@@ -4,49 +4,68 @@
 # https://github.com/crate/docker-crate
 #
 
-FROM alpine:3.7
+#changed to rhel 
+FROM rhel7:latest
+
 MAINTAINER Crate.IO GmbH office@crate.io
 
-ENV GOSU_VERSION 1.9
-RUN set -x \
-    && apk add --no-cache --virtual .gosu-deps \
-        dpkg \
-        gnupg \
-        curl \
-    && export ARCH=$(echo $(dpkg --print-architecture) | cut -d"-" -f3) \
-    && curl -o /usr/local/bin/gosu -fSL "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$ARCH" \
-    && curl -o /usr/local/bin/gosu.asc -fSL "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$ARCH.asc" \
-    && export GNUPGHOME="$(mktemp -d)" \
-    && gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-    && gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
-    && rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc \
-    && chmod +x /usr/local/bin/gosu \
-    && gosu nobody true \
-    && apk del .gosu-deps
+#license needed to pass scan
+COPY LICENSE.txt /license
 
-RUN addgroup crate && adduser -G crate -H crate -D
+ENV GOSU_VERSION 1.9
+
+RUN set -x \
+#rhel version of installing gosu	
+	\
+	yum -y install epel-release; \
+        yum -y install wget dpkg; \
+        \
+        dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
+        wget -O /usr/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch"; \
+        wget -O /tmp/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch.asc"; \
+        \
+# verify the signature
+        export GNUPGHOME="$(mktemp -d)"; \
+        gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \
+        gpg --batch --verify /tmp/gosu.asc /usr/bin/gosu; \
+        rm -r "$GNUPGHOME" /tmp/gosu.asc; \
+        \
+        chmod +x /usr/bin/gosu; \
+# verify that the binary works
+        gosu nobody true; \
+        \
+        yum -y remove wget dpkg; \
+        rm -rf /var/cache/yum; \
+        yum clean all
+
+#changed addgroup -> groupadd, adduser -> useradd, changed -H -> -h
+RUN groupadd crate && useradd -G crate -h crate -D
+
 
 # install crate
 ENV CRATE_VERSION 3.0.3
-RUN apk add --no-cache --virtual .crate-rundeps \
-        openjdk8-jre-base \
-        python3 \
-        openssl \
-        curl \
-    && apk add --no-cache --virtual .build-deps \
-        gnupg \
-        tar \
-    && curl -fSL -O https://cdn.crate.io/downloads/releases/crate-$CRATE_VERSION.tar.gz \
-    && curl -fSL -O https://cdn.crate.io/downloads/releases/crate-$CRATE_VERSION.tar.gz.asc \
-    && export GNUPGHOME="$(mktemp -d)" \
-    && gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 90C23FC6585BC0717F8FBFC37FAAE51A06F6EAEB \
-    && gpg --batch --verify crate-$CRATE_VERSION.tar.gz.asc crate-$CRATE_VERSION.tar.gz \
-    && rm -rf "$GNUPGHOME" crate-$CRATE_VERSION.tar.gz.asc \
-    && mkdir /crate \
-    && tar -xf crate-$CRATE_VERSION.tar.gz -C /crate --strip-components=1 \
-    && rm crate-$CRATE_VERSION.tar.gz \
-    && ln -s /usr/bin/python3 /usr/bin/python \
-    && apk del .build-deps
+RUN set -x \
+
+     \
+     yum -y install openjdk8-jre-base; \
+     yum -y install python3; \
+     yum -y install openssl; \
+     yum -y install curl; \
+     yum -y install gnupg; \
+     yum -y install tar; \
+     
+     curl -fSL -O https://cdn.crate.io/downloads/releases/crate-$CRATE_VERSION.tar.gz; \
+     curl -fSL -O https://cdn.crate.io/downloads/releases/crate-$CRATE_VERSION.tar.gz.asc; \
+     export GNUPGHOME="$(mktemp -d)"; \
+     gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 90C23FC6585BC0717F8FBFC37FAAE51A06F6EAEB; \
+     gpg --batch --verify crate-$CRATE_VERSION.tar.gz.asc crate-$CRATE_VERSION.tar.gz; \
+     rm -rf "$GNUPGHOME" crate-$CRATE_VERSION.tar.gz.asc; \
+     mkdir /crate; \
+     tar -xf crate-$CRATE_VERSION.tar.gz -C /crate --strip-components=1; \
+     rm crate-$CRATE_VERSION.tar.gz; \
+     ln -s /usr/bin/python3 /usr/bin/python; \
+#changed from apk del -> yum remove
+       yum remove .build-deps
 
 ENV PATH /crate/bin:$PATH
 # Default heap size for Docker, can be overwritten by args
