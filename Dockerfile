@@ -17,8 +17,7 @@ ENV GOSU_VERSION 1.9
 RUN set -x \
 #rhel version of installing gosu	
 	\
-	yum -y install epel-release; \
-        yum -y install wget dpkg; \
+	yum -y install epel-release wget dpkg \
         \
         dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
         wget -O /usr/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$dpkgArch"; \
@@ -44,28 +43,21 @@ RUN groupadd crate && useradd -G crate -h crate -D
 
 # install crate
 ENV CRATE_VERSION 3.0.3
-RUN set -x \
-
-     \
-     yum -y install openjdk8-jre-base; \
-     yum -y install python3; \
-     yum -y install openssl; \
-     yum -y install curl; \
-     yum -y install gnupg; \
-     yum -y install tar; \
-     
-     curl -fSL -O https://cdn.crate.io/downloads/releases/crate-$CRATE_VERSION.tar.gz; \
-     curl -fSL -O https://cdn.crate.io/downloads/releases/crate-$CRATE_VERSION.tar.gz.asc; \
-     export GNUPGHOME="$(mktemp -d)"; \
-     gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 90C23FC6585BC0717F8FBFC37FAAE51A06F6EAEB; \
-     gpg --batch --verify crate-$CRATE_VERSION.tar.gz.asc crate-$CRATE_VERSION.tar.gz; \
-     rm -rf "$GNUPGHOME" crate-$CRATE_VERSION.tar.gz.asc; \
-     mkdir /crate; \
-     tar -xf crate-$CRATE_VERSION.tar.gz -C /crate --strip-components=1; \
-     rm crate-$CRATE_VERSION.tar.gz; \
-     ln -s /usr/bin/python3 /usr/bin/python; \
+RUN \ 
+   \
+   yum -y install openjdk8-jre-base python3 openssl curl gnupg tar && \
+   curl -fSL -O https://cdn.crate.io/downloads/releases/crate-$CRATE_VERSION.tar.gz && \
+   curl -fSL -O https://cdn.crate.io/downloads/releases/crate-$CRATE_VERSION.tar.gz.asc && \
+   export GNUPGHOME="$(mktemp -d)" && \
+   gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 90C23FC6585BC0717F8FBFC37FAAE51A06F6EAE && \
+   gpg --batch --verify crate-$CRATE_VERSION.tar.gz.asc crate-$CRATE_VERSION.tar.gz && \
+   rm -rf "$GNUPGHOME" crate-$CRATE_VERSION.tar.gz.asc && \
+   mkdir /crate && \
+   tar -xf crate-$CRATE_VERSION.tar.gz -C /crate --strip-components=1 && \
+   rm crate-$CRATE_VERSION.tar.gz && \
+   ln -s /usr/bin/python3 /usr/bin/python && \
 #changed from apk del -> yum remove
-       yum remove .build-deps
+    &&  yum remove .build-deps
 
 ENV PATH /crate/bin:$PATH
 # Default heap size for Docker, can be overwritten by args
